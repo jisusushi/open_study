@@ -1,5 +1,5 @@
 # my_open_study
-공부 하고있는/했던 다양한 분야들을 기록하는 나만의 studyspace
+공부 하고있는/했던 다양한 분야들을 기록하는 저만의 StudySpace입니다!
 
 ## Introduction
 안녕하세요! 데이터 사이언스와 머신러닝/딥러닝을 함께 공부하고 있는, Data 분야의 all-round player가 되기를 바라는 주니어 개발자입니다!
