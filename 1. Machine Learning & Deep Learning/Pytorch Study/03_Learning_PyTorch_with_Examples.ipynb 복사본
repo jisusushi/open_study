@@ -1,0 +1,892 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "**y= sin(x)를 fitting하는 문제를 다룰 것!**\n",
+    "\n",
+    "전반적으로 앞의 세 tutorial(tensor, autograd, nn)을 복습하는 느낌\n",
+    "\n",
+    "## Table of Contents\n",
+    "### 0. Tensors\n",
+    "* numpy를 이용하여 Nerual Network 설계\n",
+    "* Tensor를 이용하여 Neural Network 설계\n",
+    "\n",
+    "구조 상으로도, accuracy 상으로도 거의 차이가 없음. 다만, Tensor는 GPU를 사용할 수 있기 때문에, 시간의 측면에서 성능 차이가 남\n",
+    "\n",
+    "### 1. Autograd\n",
+    "* autograd를 이용하 backward pass를 구현하기\n",
+    "* customizing autograd\n",
+    "\n",
+    "### 2. nn Module\n",
+    "* nn Module을 사용해 Neural Network 설계\n",
+    "* customizing nn module\n",
+    "\n",
+    "---"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Tensors\n",
+    "\n",
+    "### Warm-up: numpy\n",
+    "비록 numpy가 deep learning을 포함한 복잡한 연산에 최적화 되어있지는 않지만, 여전히 numpy로도 forward/backward 구현이 가능"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "metadata": {
+    "scrolled": false
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "99 2340.702466078339\n",
+      "199 1554.2998485804023\n",
+      "299 1033.2621478778576\n",
+      "399 687.9966575224632\n",
+      "499 459.1737648492539\n",
+      "599 307.4994241573625\n",
+      "699 206.94633450518404\n",
+      "799 140.27272720480255\n",
+      "899 96.05539325798216\n",
+      "999 66.72510444116288\n",
+      "1099 47.26564733295402\n",
+      "1199 34.35222344563479\n",
+      "1299 25.780770833896106\n",
+      "1399 20.08993395821267\n",
+      "1499 16.310617814669083\n",
+      "1599 13.800045579097526\n",
+      "1699 12.131792149072778\n",
+      "1799 11.022901060325921\n",
+      "1899 10.285571832022322\n",
+      "1999 9.795129215912723\n",
+      "Result: y= -0.010919999357367796 + 0.828043194680475x + 0.0018838815987195895x^2 + -0.08924839845797145x^3\n"
+     ]
+    }
+   ],
+   "source": [
+    "import numpy as np\n",
+    "import math\n",
+    "\n",
+    "# create random input and output data\n",
+    "x= np.linspace(-math.pi, math.pi,  2000)\n",
+    "y= np.sin(x)\n",
+    "\n",
+    "# randomly initialzie weights\n",
+    "a= np.random.randn()\n",
+    "b= np.random.randn()\n",
+    "c= np.random.randn()\n",
+    "d= np.random.randn()\n",
+    "\n",
+    "learning_rate= 1e-6\n",
+    "for t in range(2000):\n",
+    "    # forward pass - compute predicted y\n",
+    "    # y = a + bx + cx^2 + dx^3\n",
+    "    y_pred= a + b*x +  c*(x**2) + d*(x**3)\n",
+    "    \n",
+    "    # compute and print loss\n",
+    "    loss= np.square(y_pred - y).sum()\n",
+    "    if t % 100 == 99:\n",
+    "        print(t, loss)\n",
+    "        \n",
+    "    # backprop to compute gradients of a, b, c, d with respect to loss\n",
+    "    grad_y_pred= 2.0 * (y_pred - y)\n",
+    "    grad_a= grad_y_pred.sum()\n",
+    "    grad_b= (grad_y_pred * x).sum()\n",
+    "    grad_c= (grad_y_pred * x ** 2).sum()\n",
+    "    grad_d= (grad_y_pred * x ** 3).sum()\n",
+    "    \n",
+    "    # update weights\n",
+    "    a -= learning_rate * grad_a\n",
+    "    b -= learning_rate * grad_b\n",
+    "    c -= learning_rate * grad_c\n",
+    "    d -= learning_rate * grad_d\n",
+    "    \n",
+    "print(f'Result: y= {a} + {b}x + {c}x^2 + {d}x^3')"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "###  PyTorch: Tensors\n",
+    "\n",
+    "numpy와 대비되는 tensor의 가장 큰 장점은, **GPU**를 사용 할 수 있다는 점이다(사실 그 외의 다른점에서는 그다지 크게 다르지 않다고 한다)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "99 127.18893432617188\n",
+      "199 90.88992309570312\n",
+      "299 65.77717590332031\n",
+      "399 48.3851432800293\n",
+      "499 36.328285217285156\n",
+      "599 27.961936950683594\n",
+      "699 22.151092529296875\n",
+      "799 18.111495971679688\n",
+      "899 15.300758361816406\n",
+      "999 13.343435287475586\n",
+      "1099 11.979296684265137\n",
+      "1199 11.027802467346191\n",
+      "1299 10.3636474609375\n",
+      "1399 9.899721145629883\n",
+      "1499 9.575419425964355\n",
+      "1599 9.348576545715332\n",
+      "1699 9.189800262451172\n",
+      "1799 9.078601837158203\n",
+      "1899 9.000678062438965\n",
+      "1999 8.946041107177734\n",
+      "Result: y= -0.011340231634676456 + 0.8530916571617126x + 0.001956378808245063x^2 + -0.09281131625175476x^3\n"
+     ]
+    }
+   ],
+   "source": [
+    "import torch\n",
+    "import math\n",
+    "\n",
+    "dtype= torch.float\n",
+    "device= torch.device('cpu')\n",
+    "\n",
+    "# create random input and output data\n",
+    "x= torch.linspace(-math.pi, math.pi, 2000, device= device, dtype= dtype)\n",
+    "y= torch.sin(x)\n",
+    "\n",
+    "# randomly initialize weights\n",
+    "a= torch.randn((), device= device, dtype= dtype)\n",
+    "b= torch.randn((), device= device, dtype= dtype)\n",
+    "c= torch.randn((), device= device, dtype= dtype)\n",
+    "d= torch.randn((), device= device, dtype= dtype)\n",
+    "\n",
+    "learning_rate= 1e-6\n",
+    "for t in range(2000):\n",
+    "    # forward pass - compute predicted y\n",
+    "    y_pred= a + b*x + c*(x**2) + d*(x**3)\n",
+    "    \n",
+    "    # compute and print loss\n",
+    "    loss= (y_pred - y).pow(2).sum().item()\n",
+    "    if t % 100 == 99:\n",
+    "        print(t, loss)\n",
+    "    \n",
+    "    # back propagation to compute gradients of a, b, c, d with respect to loss\n",
+    "    grad_y_pred= 2.0 * (y_pred - y)\n",
+    "    grad_a= grad_y_pred.sum()\n",
+    "    grad_b= (grad_y_pred * x).sum()\n",
+    "    grad_c= (grad_y_pred * x ** 2).sum()\n",
+    "    grad_d= (grad_y_pred * x ** 3).sum()\n",
+    "    \n",
+    "    a -= learning_rate * grad_a\n",
+    "    b -= learning_rate * grad_b\n",
+    "    c -= learning_rate * grad_c\n",
+    "    d -= learning_rate * grad_d\n",
+    "    \n",
+    "print('Result: y= {} + {}x + {}x^2 + {}x^3'.format(a, b, c, d))"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "당연히 성능에는 차이가 없다. device='cuda'로 설정 시 속도가 차이날 수는 있음"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "---\n",
+    "## Autograd\n",
+    "### PyTorch: Tensors and autograd\n",
+    "\n",
+    "위의 예시에서는 직접 forward pass와 backward pass를 구현하였지만, 실제로는 backward pass를 구현할 필요가 없다. **Autograd**의 존재 덕분. (autograd에 대한 자세한 내용은 Tutorial_Autograd에서 다룸)\n",
+    "\n",
+    "따라서 우리는 forward pass로 network가 가지는 computational graph를 설계해주고, autograd가 backward pass를 진행하도록 ``.backward()``를 불러주기만 하면 된다.\n",
+    "\n",
+    "* ``tensor.item()`` - element가 1개밖에 없는 tensor에서, 그 element의 값을 scalar로 반환\n",
+    "* weight을 update할 때에는 연산을 추적할 필요가 없으므로 ``with torch.no_grad()``:로 감싼다!\n",
+    "* weight을 update할 때에는 매 update후 gradient를 초기화(clear)해야 함."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "99 7313.1875\n",
+      "199 4875.544921875\n",
+      "299 3252.921875\n",
+      "399 2172.367431640625\n",
+      "499 1452.474853515625\n",
+      "599 972.642822265625\n",
+      "699 652.6620483398438\n",
+      "799 439.1701354980469\n",
+      "899 296.6507568359375\n",
+      "999 201.45591735839844\n",
+      "1099 137.83328247070312\n",
+      "1199 95.28516387939453\n",
+      "1299 66.81243896484375\n",
+      "1399 47.745582580566406\n",
+      "1499 34.96830749511719\n",
+      "1599 26.399581909179688\n",
+      "1699 20.648761749267578\n",
+      "1799 16.785982131958008\n",
+      "1899 14.189315795898438\n",
+      "1999 12.44221019744873\n",
+      "Result: y= -0.0352456234395504 + 0.8079785108566284x + 0.006080457009375095x^2 + -0.08639436960220337x^3\n"
+     ]
+    }
+   ],
+   "source": [
+    "import torch\n",
+    "import math\n",
+    "\n",
+    "dtype= torch.float\n",
+    "device= torch.device('cpu')\n",
+    "\n",
+    "x= torch.linspace(-math.pi, math.pi, 2000, device= device, dtype= dtype)\n",
+    "y= torch.sin(x)\n",
+    "\n",
+    "# create random tensors for weights\n",
+    "# set requires_grad=True to indicate we want to compute gradients of these Tensors during backward pass\n",
+    "a= torch.randn((),  device= device, dtype= dtype, requires_grad=True)\n",
+    "b= torch.randn((),  device= device, dtype= dtype, requires_grad=True)\n",
+    "c= torch.randn((),  device= device, dtype= dtype, requires_grad=True)\n",
+    "d= torch.randn((),  device= device, dtype= dtype, requires_grad=True)\n",
+    "\n",
+    "learning_rate= 1e-6\n",
+    "for t in range(2000):\n",
+    "    # forward pass\n",
+    "    y_pred= a + b*x + c*(x**2) + d*(x**3)\n",
+    "    \n",
+    "    # compute loss, which is scala value here\n",
+    "    loss=  (y_pred - y).pow(2).sum()\n",
+    "    if t % 100 == 99:\n",
+    "        # tensor.item() -> only to tensor with only one element, its value to scalar\n",
+    "        print(t, loss.item())\n",
+    "    \n",
+    "    # use .backward() to compute backward pass\n",
+    "    loss.backward()\n",
+    "    \n",
+    "    # manually update weights using gradient descent.\n",
+    "    # wrap in torch.no_grad() b/c we don't need to track this update computaition in autograd\n",
+    "    with torch.no_grad():\n",
+    "        a -= learning_rate * a.grad\n",
+    "        b -= learning_rate * b.grad\n",
+    "        c -= learning_rate * c.grad\n",
+    "        d -= learning_rate * d.grad\n",
+    "    \n",
+    "        # manually clear the gradients after updating weights\n",
+    "        a.grad= None\n",
+    "        b.grad= None\n",
+    "        c.grad= None\n",
+    "        d.grad= None\n",
+    "\n",
+    "print('Result: y= {} + {}x + {}x^2 + {}x^3'.format(a.item(), b.item(), c.item(), d.item()))"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### PyTorch: Defining new autograd functions\n",
+    "\n",
+    "필요한 경우, 새로운 **autograd function**을 만들 수 있다. 이 때,\n",
+    "* ``torch.autograd.Function``의 subclass로 만든다.\n",
+    "* ``forward``와 ``backward`` function을 implement한다.\n",
+    "\n",
+    "여기서는, $y=a+b P_3(c+dx)$라는 ``Legendre Polynomial``을 구현한다."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "99 209.95834350585938\n",
+      "199 144.66018676757812\n",
+      "299 100.70249938964844\n",
+      "399 71.03519439697266\n",
+      "499 50.97850799560547\n",
+      "599 37.403133392333984\n",
+      "699 28.206867218017578\n",
+      "799 21.973188400268555\n",
+      "899 17.7457275390625\n",
+      "999 14.877889633178711\n",
+      "1099 12.931766510009766\n",
+      "1199 11.610918045043945\n",
+      "1299 10.714258193969727\n",
+      "1399 10.10548210144043\n",
+      "1499 9.692106246948242\n",
+      "1599 9.411375999450684\n",
+      "1699 9.220745086669922\n",
+      "1799 9.091285705566406\n",
+      "1899 9.003361701965332\n",
+      "1999 8.943639755249023\n",
+      "Result: y= -6.8844756562214116e-09 + -2.208526849746704 * P3(1.5037101563919464e-09 + 0.2554861009120941x))\n"
+     ]
+    }
+   ],
+   "source": [
+    "import torch\n",
+    "import math\n",
+    "\n",
+    "class LegendrePolynomial3(torch.autograd.Function):\n",
+    "    \n",
+    "    @staticmethod\n",
+    "    def forward(ctx, input):\n",
+    "        # ctx: context object - used for stashing information for backward computation.\n",
+    "        # can cache arbitrary objects for use in the backward pass using the ctx.save_for_backward method\n",
+    "        ctx.save_for_backward(input)\n",
+    "        \n",
+    "        return 0.5 * (5 * input ** 3 - 3 * input)\n",
+    "    \n",
+    "    @staticmethod\n",
+    "    def backward(ctx, grad_output):\n",
+    "        # in the backward pass, we recieve a Tensor containing the gradient of the loss w.r.t. to the output\n",
+    "        # we need to compute the gradient of the loss w.r.t. the input\n",
+    "        input, =ctx.saved_tensors\n",
+    "        return grad_output * 1.5 * (5 * input ** 2 - 1)\n",
+    "\n",
+    "dtype= torch.float\n",
+    "device= torch.device(\"cpu\")\n",
+    "\n",
+    "x= torch.linspace(-math.pi, math.pi, 2000, device= device, dtype= dtype)\n",
+    "y= torch.sin(x)\n",
+    "\n",
+    "# create random tensors for weights\n",
+    "# set requires_grad=True to indicate we want to compute gradients of these Tensors during backward pass\n",
+    "a= torch.full((), 0.0, device= device, dtype= dtype, requires_grad=True)\n",
+    "b= torch.full((), -1.0, device= device, dtype= dtype, requires_grad=True)\n",
+    "c= torch.full((), 0.0, device= device, dtype= dtype, requires_grad=True)\n",
+    "d= torch.full((), 0.3, device= device, dtype= dtype, requires_grad=True)\n",
+    "\n",
+    "learning_rate= 5e-6\n",
+    "for t in range(2000):\n",
+    "    # to apply our function, we use Function.apply method. we alias this as 'P3'.\n",
+    "    P3= LegendrePolynomial3.apply\n",
+    "    \n",
+    "    # forward pass - compute predicted y using our operations.\n",
+    "    y_pred= a + b * P3(c + d*x)\n",
+    "    \n",
+    "    # compute loss\n",
+    "    loss= (y_pred - y).pow(2).sum()\n",
+    "    if t % 100 == 99:\n",
+    "        print(t, loss.item())\n",
+    "        \n",
+    "    # use autograd to  compute the backward pass\n",
+    "    loss.backward()\n",
+    "    \n",
+    "    # update weights using g.d.\n",
+    "    with torch.no_grad():\n",
+    "        a -= learning_rate * a.grad\n",
+    "        b -= learning_rate * b.grad\n",
+    "        c -= learning_rate * c.grad\n",
+    "        d -= learning_rate * d.grad\n",
+    "    \n",
+    "        # manually clear the gradients after updating weights\n",
+    "        a.grad= None\n",
+    "        b.grad= None\n",
+    "        c.grad= None\n",
+    "        d.grad= None\n",
+    "\n",
+    "print('Result: y= {} + {} * P3({} + {}x))'.format(a.item(), b.item(), c.item(), d.item()))"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## nn Module\n",
+    "### PyTorch: nn\n",
+    "\n",
+    "PyTorch의 ``nn`` 패키지는 neural network를 설계하기 위한 high-level 추상화 및 연산을 수행한다.\n",
+    "대표적으로, \n",
+    "* nn의 Module은 neural network의 layer와 같은 역할을 한다.\n",
+    "* nn의 Module은 input Tensor를 받아 output Tensor를 반환하며, 그 과정에서 learnable parameters와 같은 정보를 보관한다.\n",
+    "* nn의 Module은 loss function 계산과 같이 neural network에 자주 사용되는 method를 정의하고 있다."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import torch\n",
+    "import math\n",
+    "\n",
+    "x= torch.linspace(-math.pi, math.pi, 2000)\n",
+    "y= torch.sin(x)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "``y=sin(x)``를 linear funcion으로 만들고 싶은 상황. \n",
+    "\n",
+    "즉, ``y= ax + bx^2 + cx^3 + d``의 꼴을 원하고 있다.\n",
+    "이 때, y의 값을 ``(x,  x^2, x^3)``의 Linear Combination으로 생각 할 수 있다.\n",
+    "따라서, input value x를 ``(x, x^2, x^3)``으로 만든다.\n",
+    "\n",
+    "**Shape 따지기**\n",
+    "* x.unsqueeze = (2000, 1)\n",
+    "* p= (3, )\n",
+    "* xx= (2000, 3) by *broadcasting*"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 6,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "p= torch.tensor([1, 2, 3])\n",
+    "xx= x.unsqueeze(-1).pow(p)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "* ``nn.Sequential``은 다른 module들을 담아, 순서대로 apply (scikit learn의 pipeline 느낌인 듯)\n",
+    "* ``nn.Linear``: input, output features를 parameter로 담아, linear comb를 진행\n",
+    "* ``nn.Flatten``: flattens output of the linear layer to a 1D tensor"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 7,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "model= torch.nn.Sequential(\n",
+    "        torch.nn.Linear(3, 1), \n",
+    "        torch.nn.Flatten(0, 1)\n",
+    ")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "``nn.MESLoss``: nn package에는 다양한 loss funciton이 내장되어 있다."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 8,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "loss_fn= torch.nn.MSELoss(reduction= 'sum')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 10,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "99 200.06491088867188\n",
+      "199 137.82827758789062\n",
+      "299 95.92902374267578\n",
+      "399 67.69600677490234\n",
+      "499 48.65394973754883\n",
+      "599 35.79831314086914\n",
+      "699 27.11073875427246\n",
+      "799 21.233810424804688\n",
+      "899 17.25417137145996\n",
+      "999 14.556417465209961\n",
+      "1099 12.725672721862793\n",
+      "1199 11.481929779052734\n",
+      "1299 10.63603687286377\n",
+      "1399 10.060086250305176\n",
+      "1499 9.667488098144531\n",
+      "1599 9.39957332611084\n",
+      "1699 9.216527938842773\n",
+      "1799 9.09132194519043\n",
+      "1899 9.005584716796875\n",
+      "1999 8.946805000305176\n"
+     ]
+    }
+   ],
+   "source": [
+    "learning_rate= 1e-6\n",
+    "for t in range(2000):\n",
+    "    # forward pass\n",
+    "    ## by doing this I can pass tensor as an input data and get output data model produced\n",
+    "    y_pred= model(xx)\n",
+    "    \n",
+    "    # compute loss\n",
+    "    loss= loss_fn(y_pred, y)\n",
+    "    if t % 100 == 99:\n",
+    "        print(t,loss.item())\n",
+    "    \n",
+    "    # zero the gradients\n",
+    "    model.zero_grad()\n",
+    "    \n",
+    "    # backward pass\n",
+    "    ## parameters of each module are stored in Tensors(requires_grad= True)\n",
+    "    loss.backward()\n",
+    "    \n",
+    "    with torch.no_grad():\n",
+    "        for param in model.parameters():\n",
+    "            param -=  learning_rate * param.grad"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Now we can access the layers of 'model' by indexing."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 11,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "linear_layer= model[0]"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "bias and weights are stored in the linear layer"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 12,
+   "metadata": {
+    "scrolled": true
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Result: y = -0.009286156855523586 + 0.8496859669685364 x + 0.001602016156539321 x^2 + -0.09232688695192337 x^3\n"
+     ]
+    }
+   ],
+   "source": [
+    "print(f'Result: y = {linear_layer.bias.item()} + {linear_layer.weight[:, 0].item()} x + {linear_layer.weight[:, 1].item()} x^2 + {linear_layer.weight[:, 2].item()} x^3')"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### PyTorch: optim\n",
+    "``torch.optim`` package contains many optimization algortihms"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 13,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "99 446.4188537597656\n",
+      "199 250.09664916992188\n",
+      "299 139.93463134765625\n",
+      "399 72.65043640136719\n",
+      "499 34.09986877441406\n",
+      "599 15.825347900390625\n",
+      "699 9.85751724243164\n",
+      "799 8.870123863220215\n",
+      "899 8.829363822937012\n",
+      "999 8.844720840454102\n",
+      "1099 8.857608795166016\n",
+      "1199 8.907981872558594\n",
+      "1299 8.933329582214355\n",
+      "1399 8.907007217407227\n",
+      "1499 8.905284881591797\n",
+      "1599 8.925554275512695\n",
+      "1699 8.927555084228516\n",
+      "1799 8.918675422668457\n",
+      "1899 8.91840934753418\n",
+      "1999 8.921612739562988\n",
+      "Result: y = -0.0005127650802023709 + 0.857241690158844 x + -0.0005128494813106954 x^2 + -0.09282944351434708 x^3\n"
+     ]
+    }
+   ],
+   "source": [
+    "import torch\n",
+    "import math\n",
+    "\n",
+    "\n",
+    "# Create Tensors to hold input and outputs.\n",
+    "x = torch.linspace(-math.pi, math.pi, 2000)\n",
+    "y = torch.sin(x)\n",
+    "\n",
+    "# Prepare the input tensor (x, x^2, x^3).\n",
+    "p = torch.tensor([1, 2, 3])\n",
+    "xx = x.unsqueeze(-1).pow(p)\n",
+    "\n",
+    "# Use the nn package to define our model and loss function.\n",
+    "model = torch.nn.Sequential(\n",
+    "    torch.nn.Linear(3, 1),\n",
+    "    torch.nn.Flatten(0, 1)\n",
+    ")\n",
+    "loss_fn = torch.nn.MSELoss(reduction='sum')\n",
+    "\n",
+    "learning_rate= 1e-3\n",
+    "optimizer= torch.optim.RMSprop(model.parameters(),  lr= learning_rate)\n",
+    "for t in range(2000):\n",
+    "    # forward pass\n",
+    "    y_pred=  model(xx)\n",
+    "    \n",
+    "    # compute loss\n",
+    "    loss= loss_fn(y_pred, y)\n",
+    "    if t % 100 == 99:\n",
+    "        print(t, loss.item())\n",
+    "        \n",
+    "    # before backwad pass, we have to zero gradients\n",
+    "    optimizer.zero_grad()\n",
+    "    \n",
+    "    loss.backward()\n",
+    "    \n",
+    "    # calling the step function on an Optimizer makes an update to its parameters\n",
+    "    optimizer.step()\n",
+    "    \n",
+    "linear_layer= model[0]\n",
+    "print(f'Result: y = {linear_layer.bias.item()} + {linear_layer.weight[:, 0].item()} x + {linear_layer.weight[:, 1].item()} x^2 + {linear_layer.weight[:, 2].item()} x^3')"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### PyTorch: Custom nn Modules\n",
+    "\n",
+    "Sometimes we need some models that are more complex than a sequence of exisitng Modules. For these cases we can define our own Modules by subclassing ``nn.Module`` and defining ``forawrd`` (like we've already done in tutorial_nn)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 15,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "99 290.34405517578125\n",
+      "199 195.2422332763672\n",
+      "299 132.27935791015625\n",
+      "399 90.5899658203125\n",
+      "499 62.98386001586914\n",
+      "599 44.701622009277344\n",
+      "699 32.59307861328125\n",
+      "799 24.572511672973633\n",
+      "899 19.25904083251953\n",
+      "999 15.738619804382324\n",
+      "1099 13.405855178833008\n",
+      "1199 11.859786033630371\n",
+      "1299 10.835033416748047\n",
+      "1399 10.15568733215332\n",
+      "1499 9.705238342285156\n",
+      "1599 9.406512260437012\n",
+      "1699 9.20836067199707\n",
+      "1799 9.076900482177734\n",
+      "1899 8.98967170715332\n",
+      "1999 8.93175983428955\n",
+      "Result: y= 0.003001720178872347 + 0.8467066287994385x + -0.0005178470746614039x^2 + -0.09190310537815094x^3\n"
+     ]
+    }
+   ],
+   "source": [
+    "import torch\n",
+    "import math\n",
+    "\n",
+    "class Polynomial3(torch.nn.Module):\n",
+    "    def __init__(self):\n",
+    "        \n",
+    "        # we need to instantiate four parameters and assign them as member parameters\n",
+    "        super().__init__()\n",
+    "        self.a= torch.nn.Parameter(torch.randn(()))\n",
+    "        self.b= torch.nn.Parameter(torch.randn(()))\n",
+    "        self.c= torch.nn.Parameter(torch.randn(()))\n",
+    "        self.d= torch.nn.Parameter(torch.randn(()))\n",
+    "        \n",
+    "    def forward(self, x):\n",
+    "        # we need to accept a input Tensor data and return output Tensor data\n",
+    "        return self.a + self.b*x + self.c*(x**2) + self.d*(x**3)\n",
+    "    \n",
+    "    def string(self):\n",
+    "        return f'y= {self.a.item()} + {self.b.item()}x + {self.c.item()}x^2 + {self.d.item()}x^3'\n",
+    "    \n",
+    "\n",
+    "x= torch.linspace(-math.pi, math.pi,2000)\n",
+    "y= torch.sin(x)\n",
+    "\n",
+    "model= Polynomial3()\n",
+    "\n",
+    "criterion= torch.nn.MSELoss(reduction= 'sum')\n",
+    "# by calling model.parameters() inside the SGD constructor, optimizer will contain learnable parameters(of Linear Module)\n",
+    "optimizer= torch.optim.SGD(model.parameters(), lr= 1e-6)\n",
+    "\n",
+    "for t in range(2000):\n",
+    "    y_pred= model(x)\n",
+    "    \n",
+    "    loss= criterion(y_pred, y)\n",
+    "    if t % 100 == 99:\n",
+    "        print(t, loss.item())\n",
+    "        \n",
+    "    optimizer.zero_grad()\n",
+    "    loss.backward()\n",
+    "    optimizer.step()\n",
+    "    \n",
+    "print(f'Result: {model.string()}')"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### PyTorch: Control Flow + Weight Sharing\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 20,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "1999 tensor(829.7263, grad_fn=<MseLossBackward>)\n",
+      "3999 tensor(407.3547, grad_fn=<MseLossBackward>)\n",
+      "5999 tensor(194.6680, grad_fn=<MseLossBackward>)\n",
+      "7999 tensor(92.6954, grad_fn=<MseLossBackward>)\n",
+      "9999 tensor(48.3777, grad_fn=<MseLossBackward>)\n",
+      "11999 tensor(27.8341, grad_fn=<MseLossBackward>)\n",
+      "13999 tensor(17.9325, grad_fn=<MseLossBackward>)\n",
+      "15999 tensor(13.1424, grad_fn=<MseLossBackward>)\n",
+      "17999 tensor(44.0211, grad_fn=<MseLossBackward>)\n",
+      "19999 tensor(9.8035, grad_fn=<MseLossBackward>)\n",
+      "21999 tensor(9.2782, grad_fn=<MseLossBackward>)\n",
+      "23999 tensor(9.4929, grad_fn=<MseLossBackward>)\n",
+      "25999 tensor(8.7682, grad_fn=<MseLossBackward>)\n",
+      "27999 tensor(8.8916, grad_fn=<MseLossBackward>)\n",
+      "29999 tensor(8.9219, grad_fn=<MseLossBackward>)\n",
+      "\n",
+      "Result: y = -0.004061676561832428 + 0.8549294471740723 x + 0.00014459357771556824 x^2 + -0.09356360882520676 x^3 + 0.00012509786756709218 x^4 ? + 0.00012509786756709218 x^5 ?\n"
+     ]
+    }
+   ],
+   "source": [
+    "import random\n",
+    "import torch\n",
+    "import math\n",
+    "\n",
+    "class DynamicNet(torch.nn.Module):\n",
+    "    def __init__(self):\n",
+    "        super().__init__()\n",
+    "        # instantiate five parameters\n",
+    "        self.a= torch.nn.Parameter(torch.randn(()))\n",
+    "        self.b= torch.nn.Parameter(torch.randn(()))\n",
+    "        self.c= torch.nn.Parameter(torch.randn(()))\n",
+    "        self.d= torch.nn.Parameter(torch.randn(()))\n",
+    "        self.e= torch.nn.Parameter(torch.randn(()))\n",
+    "        \n",
+    "    def forward(self, x):\n",
+    "        # random하게 linear식을 4제곱과 5제곱 중 하나로 고른다. 이 때, 몇 제곱이든지 상관없이 4제곱 이상에서는 e를 parameter로 사용한다.\n",
+    "        # 이를 구현하는 과정에서 python의 control-flow operator중 일부인 loop나 conditional statement를 사용하여도 상관없다.\n",
+    "        y= self.a + self.b*x + self.c*(x**2) + self.d*(x**3)\n",
+    "        for exp in range(4, random.randint(4, 6)):\n",
+    "            y+= self.e * (x ** exp)\n",
+    "            \n",
+    "        return y\n",
+    "    \n",
+    "    def string(self):\n",
+    "        \n",
+    "        return f'y = {self.a.item()} + {self.b.item()} x + {self.c.item()} x^2 + {self.d.item()} x^3 + {self.e.item()} x^4 ? + {self.e.item()} x^5 ?'\n",
+    "    \n",
+    "    \n",
+    "x = torch.linspace(-math.pi, math.pi, 2000)\n",
+    "y = torch.sin(x)\n",
+    "\n",
+    "model= DynamicNet()\n",
+    "\n",
+    "criterion= torch.nn.MSELoss(reduction= 'sum')\n",
+    "optimizer= torch.optim.SGD(model.parameters(), lr= 1e-8,  momentum= 0.9)\n",
+    "\n",
+    "for t in range(30000):\n",
+    "    y_pred= model(x)\n",
+    "    \n",
+    "    loss= criterion(y_pred,  y)\n",
+    "    if t % 2000 == 1999:\n",
+    "        print(t, loss)\n",
+    "        \n",
+    "    optimizer.zero_grad()\n",
+    "    loss.backward()\n",
+    "    optimizer.step()\n",
+    "    \n",
+    "print()\n",
+    "print(f'Result: {model.string()}')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.8.3"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 4
+}
