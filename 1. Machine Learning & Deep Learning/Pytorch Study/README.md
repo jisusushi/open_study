@@ -9,11 +9,11 @@ The contents are based on [Pytorch Tutorials](https://pytorch.org/tutorials/).
 ### Introduction
 
 1. [PyTorch in 60 minutes](https://pytorch.org/tutorials/beginner/deep_learning_60min_blitz.html)
-    - Tensors 
-    - [Torch.autograd](https://pytorch.org/tutorials/beginner/blitz/autograd_tutorial.html#sphx-glr-beginner-blitz-autograd-tutorial-py)
-    - [Neural Networks](https://pytorch.org/tutorials/beginner/blitz/neural_networks_tutorial.html#sphx-glr-beginner-blitz-neural-networks-tutorial-py)
+    - Tensors (1/20)
+    - [Torch.autograd](https://pytorch.org/tutorials/beginner/blitz/autograd_tutorial.html#sphx-glr-beginner-blitz-autograd-tutorial-py) (1/20)
+    - [Neural Networks](https://pytorch.org/tutorials/beginner/blitz/neural_networks_tutorial.html#sphx-glr-beginner-blitz-neural-networks-tutorial-py) (1/23)
     - [Training a Classifier](https://pytorch.org/tutorials/beginner/blitz/cifar10_tutorial.html#sphx-glr-beginner-blitz-cifar10-tutorial-py)
-2. [Learning PyTorch with examples](https://pytorch.org/tutorials/beginner/pytorch_with_examples.html)
+2. [Learning PyTorch with examples](https://pytorch.org/tutorials/beginner/pytorch_with_examples.html) (1/24)
     - Note: Training a Classifier보다 조금 더 기초적인 내용을 다루는 듯 해 순서를 swap
 3. [What is Torch.nn really?](https://pytorch.org/tutorials/beginner/nn_tutorial.html)
 4. [Visualizing Models, Data, and Training with Tensorboard](https://pytorch.org/tutorials/intermediate/tensorboard_tutorial.html)
