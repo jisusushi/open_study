@@ -21,9 +21,9 @@
 * 실시간 주식 거래 분석을 통해 1분 후의 급락 Detection (2020.10 ~ 2020.12) - 추후 github에 업데이트 예정
 
 ### 공부중인 분야
-* Deep Learning(PyTorch Tutorial)
-* Recommendation System
-* Big Data System(전반적인 시스템 & Spark)
+* Deep Learning([PyTorch Tutorial](https://pytorch.org/tutorials/index.html))
+* Recommendation System([Python을 이용한 개인화 추천시스템 책](http://www.yes24.com/Product/Goods/92150193))
+* Big Data System(전반적인 시스템 & [스파크 완벽 가이드 책](http://www.yes24.com/Product/Goods/67116641))
 
 ### Contact
 📫: jisu980825@gmail.com
